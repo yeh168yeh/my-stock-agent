@@ -212,26 +212,25 @@
   </div>
 
   <script>
-    const el = (id)=>document.getElementById(id);
-    const fileInput = el('file');
-    const btn = el('btnParse');
-    const statusText = el('status');
-    const errBox = el('err');
-    const tbody = el('tbody');
-    const pickDiv = el('pick');
-    const descDiv = el('desc');
+    const fileInput = document.getElementById('file');
+    const btnParse = document.getElementById('btnParse');
+    const statusText = document.getElementById('status');
+    const errBox = document.getElementById('err');
+    const tbody = document.getElementById('tbody');
+    const pickDiv = document.getElementById('pick');
+    const descDiv = document.getElementById('desc');
 
     fileInput.addEventListener('change', () => {
       if (fileInput.files.length > 0) {
-        btn.disabled = false;
+        btnParse.disabled = false;
         statusText.innerText = `已選取檔案: ${fileInput.files[0].name}`;
         errBox.classList.add('hide');
       } else {
-        btn.disabled = true;
+        btnParse.disabled = true;
       }
     });
 
-    btn.addEventListener('click', () => {
+    btnParse.addEventListener('click', () => {
       const file = fileInput.files[0];
       if (!file) return;
 
@@ -241,7 +240,7 @@
           const text = e.target.result;
           processCSV(text);
         } catch (err) {
-          showError(`解析失敗: ${err.message}。請確認這是否為標準的 XQ CSV 檔案。`);
+          showError(`解析失敗: ${err.message}`);
         }
       };
       reader.onerror = () => showError("檔案讀取發生錯誤。");
@@ -260,13 +259,12 @@
         return;
       }
 
-      // 解析標頭
-      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+      // 支援逗號或分號分隔，並清除雙引號
+      const headers = lines[0].split(/[,;]/).map(h => h.trim().replace(/^"|"$/g, ''));
       
-      // 智慧索引配對
       let codeIdx = headers.findIndex(h => h.includes("代碼") || h.includes("商品") || h.includes("代號"));
       let nameIdx = headers.findIndex(h => h.includes("名稱") || h.includes("公司"));
       let reasonIdx = headers.findIndex(h => h.includes("原因") || h.includes("名師") || h.includes("觸發"));
       let positionIdx = headers.findIndex(h => h.includes("位階"));
-      let priceIdx = headers.findIndex(h => h.includes("進場") || h.includes("價"));
-let fireIdx = headers.findIndex(h => h.includes("點火") || h.includes("雷達") || h.includes("連動"));// 備用索引防錯if (codeIdx === -1) codeIdx = 0;if (nameIdx === -1) nameIdx = headers.length > 1 ? 1 : 0;if (reasonIdx === -1) reasonIdx = headers.length > 3 ? 3 : 2;if (positionIdx === -1) positionIdx = headers.length > 2 ? 2 : 1;if (priceIdx === -1) priceIdx = headers.length > 4 ? 4 : 3;if (fireIdx === -1) fireIdx = headers.length > 5 ? 5 : headers.length - 1;tbody.innerHTML = '';pickDiv.innerHTML = '';let strongStocks = [];let totalCount = 0;let summary = { zhu: 0, lin: 0, yan: 0, chen: 0, fire: 0 };for (let i = 1; i < lines.length; i++) {const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));if (cols.length < 2) continue;let code = cols[codeIdx] || "—";let name = cols[nameIdx] || "—";let reason = cols[reasonIdx] || "—";let position = cols[positionIdx] || "—";let price = cols[priceIdx] || "—";let fire = cols[fireIdx] || "—";// 如果代碼和名稱黏在一起，進行自動拆解if (code && name === "—" && code.includes(" ")) {const parts = code.split(" ");code = parts[0];name = parts[1];}totalCount++;// 四大名師邏輯計數let matchCount = 0;if (reason.includes("朱")) { matchCount++; summary.zhu++; }if (reason.includes("林")) { matchCount++; summary.lin++; }if (reason.includes("春")) { matchCount++; summary.yan++; }if (reason.includes("陳")) { matchCount++; summary.chen++; }const isFired = fire.includes("點火") || fire.includes("是") || fire.includes("🔥") || fire.includes("??");if (isFired) summary.fire++;// 判定多重共振強勢個股const isHighlight = matchCount >= 2 || (matchCount >= 1 && isFired);if (isHighlight) {strongStocks.push({ code, name, reason, position, fire, isFired });}// 寫入完整清單表格const tr = document.createElement('tr');if (isHighlight) tr.className = "highlight";tr.innerHTML = `${code}${name}${reason}${position}${price}${fire}`;tbody.appendChild(tr);}// 渲染多重共振強勢股卡片if (strongStocks.length > 0) {strongStocks.forEach(s => {const item = document.createElement('div');item.style.marginBottom = "12px";item.innerHTML = <div class="title" style="color:#35c0ff">🚀 ${s.name} (${s.code})</div> <div class="kv" style="margin-top:6px;"> <span class="cell">策略: <b style="color:#facc15">${s.reason}</b></span> <span class="cell">位階: <b style="color:#7bffb7">${s.position}</b></span> <span class="cell">狀態: <b style="color:#ff8a65">${s.fire}</b></span> </div>;pickDiv.appendChild(item);});} else {pickDiv.innerHTML = '今日未偵測到符合雙重名師共振或點火之強勢股';}// 生成智能化技術面綜合描述let report = 【自動化技術面結構報告】\n今日 XQ 策略雷達共篩選出 ${totalCount} 檔個股。\n\n;if (strongStocks.length > 0) {const topStock = strongStocks[0];report += 🔥 核心焦點：系統今日成功鎖定 ${strongStocks.length} 檔滿足名師「多重共振」架構之強勢標的。其中以 【${topStock.name}】 多頭結構最為突顯，目前該股處於${topStock.position}，且盤中釋放【${topStock.fire}】攻擊訊號，技術面凝聚了 ${topStock.reason} 四大名師的多重策略認證，動能強烈爆發。\n\n;} else {report += 📈 盤勢結構：今日盤面表現相對分散，個股未出現多重指標強烈共振。整體多頭動能處於零星點火狀態，建議靜待關鍵回溫訊號。\n\n;}report += 🎯 策略分佈統計：\n- 朱家鴻(均線多頭)觸發: ${summary.zhu} 檔\n- 林穎(突破強勢紅K)觸發: ${summary.lin} 檔\n- 春燕(量大發動攻擊)觸發: ${summary.yan} 檔\n- 陳重銘(護城河低檔)觸發: ${summary.chen} 檔\n- 盤中雷達已點火個股: ${summary.fire} 檔。\n\n風控提示：請優先留意共振強勢股的「建議進場價」防守力道，若個股處於低位或中位更具防禦優勢。;descDiv.innerText = report;statusText.innerText = "分析完成！已成功解碼 XQ 數據。";}
+
+    let priceIdx = headers.findIndex(h => h.includes("進場") || h.includes("價"));let fireIdx = headers.findIndex(h => h.includes("點火") || h.includes("雷達") || h.includes("連動"));if (codeIdx === -1) codeIdx = 0;if (nameIdx === -1) nameIdx = headers.length > 1 ? 1 : 0;if (reasonIdx === -1) reasonIdx = headers.length > 3 ? 3 : 2;if (positionIdx === -1) positionIdx = headers.length > 2 ? 2 : 1;if (priceIdx === -1) priceIdx = headers.length > 4 ? 4 : 3;if (fireIdx === -1) fireIdx = headers.length > 5 ? 5 : headers.length - 1;tbody.innerHTML = '';pickDiv.innerHTML = '';let strongStocks = [];let totalCount = 0;let summary = { zhu: 0, lin: 0, yan: 0, chen: 0, fire: 0 };for (let i = 1; i < lines.length; i++) {// 智慧相容引號內含逗號的情況const cols = lines[i].split(/[,;]/).map(c => c.trim().replace(/^"|"$/g, ''));if (cols.length < 2) continue;let code = cols[codeIdx] || "—";let name = cols[nameIdx] || "—";let reason = cols[reasonIdx] || "—";let position = cols[positionIdx] || "—";let price = cols[priceIdx] || "—";let fire = cols[fireIdx] || "—";// 自動拆分 XQ 導出時黏在一起的代碼與名稱if (code && name === "—" && code.includes(" ")) {const parts = code.split(" ");code = parts[0];name = parts[1] || parts[0];}totalCount++;let matchCount = 0;if (reason.includes("朱")) { matchCount++; summary.zhu++; }if (reason.includes("林")) { matchCount++; summary.lin++; }if (reason.includes("春")) { matchCount++; summary.yan++; }if (reason.includes("陳")) { matchCount++; summary.chen++; }const isFired = fire.includes("點火") || fire.includes("是") || fire.includes("🔥") || fire.includes("火") || fire.includes("點");if (isFired) summary.fire++;const isHighlight = matchCount >= 2 || (matchCount >= 1 && isFired);if (isHighlight) {strongStocks.push({ code, name, reason, position, fire, price, isFired });}const tr = document.createElement('tr');if (isHighlight) tr.className = "highlight";tr.innerHTML = `${code}${name}${reason}${position}${price}${fire}`;tbody.appendChild(tr);}if (strongStocks.length > 0) {strongStocks.forEach(s => {const item = document.createElement('div');item.style.marginBottom = "12px";item.innerHTML = <div class="title" style="color:#35c0ff">🚀 ${s.name} (${s.code})</div> <div class="kv" style="margin-top:6px;"> <span class="cell">策略: <b style="color:#facc15">${s.reason}</b></span> <span class="cell">位階: <b style="color:#7bffb7">${s.position}</b></span> <span class="cell">進場: <b style="color:#7bffb7">${s.price}</b></span> <span class="cell">狀態: <b style="color:#ff8a65">${s.fire}</b></span> </div>;pickDiv.appendChild(item);});} else {pickDiv.innerHTML = '今日未偵測到符合雙重名師共振或點火之強勢股';}let report = 【自動化技術面結構報告】\n今日 XQ 策略雷達共篩選出 ${totalCount} 檔個股。\n\n;if (strongStocks.length > 0) {const topStock = strongStocks[0];report += 🔥 核心焦點：系統今日成功鎖定 ${strongStocks.length} 檔滿足名師「多重共振」架構之強勢標的。其中以 【${topStock.name}】 多頭結構最為突顯，目前該股處於${topStock.position}，且盤中釋放【${topStock.fire}】攻擊訊號，技術面凝聚了 ${topStock.reason} 四大名師的多重策略認證，動能強烈爆發。\n\n;} else {report += 📈 盤勢結構：今日盤面表現相對分散，個股未出現多重指標強烈共振。整體多頭動能處於零星點火狀態，建議靜待關鍵回溫訊號。\n\n;}report += 🎯 策略分佈統計：\n- 朱家鴻(均線多頭)觸發: ${summary.zhu} 檔\n- 林穎(突破強勢紅K)觸發: ${summary.lin} 檔\n- 春燕(量大發動攻擊)觸發: ${summary.yan} 檔\n- 陳重銘(護城河低檔)觸發: ${summary.chen} 檔\n- 盤中雷達已點火個股: ${summary.fire} 檔。\n\n風控提示：請優先留意共振強勢股的「建議進場價」防守力道，若個股處於低位或中位更具防禦優勢。;descDiv.innerText = report;statusText.innerText = "分析完成！已成功解碼 XQ 數據。";}
