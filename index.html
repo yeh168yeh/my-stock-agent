@@ -1,91 +1,339 @@
-function processCSV(csvText) {
-  const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
-  if (lines.length < 2) {
-    showError("CSV 檔案內容不足（缺少標頭或數據）");
-    return;
-  }
-
-  const headers = lines[0].split(/[,;]/).map(h => h.trim().replace(/^"|"$/g, ''));
-  
-  let codeIdx = headers.findIndex(h => h.includes("代碼") || h.includes("商品") || h.includes("代號"));
-  let nameIdx = headers.findIndex(h => h.includes("名稱") || h.includes("公司"));
-  let reasonIdx = headers.findIndex(h => h.includes("原因") || h.includes("名師") || h.includes("觸發"));
-  let positionIdx = headers.findIndex(h => h.includes("位階"));
-  let priceIdx = headers.findIndex(h => h.includes("進場") || h.includes("價"));
-  let fireIdx = headers.findIndex(h => h.includes("點火") || h.includes("雷達") || h.includes("連動"));
-
-  if (codeIdx === -1) codeIdx = 0;
-  if (nameIdx === -1) nameIdx = headers.length > 1 ? 1 : 0;
-  if (reasonIdx === -1) reasonIdx = headers.length > 3 ? 3 : 2;
-  if (positionIdx === -1) positionIdx = headers.length > 2 ? 2 : 1;
-  if (priceIdx === -1) priceIdx = headers.length > 4 ? 4 : 3;
-  if (fireIdx === -1) fireIdx = headers.length > 5 ? 5 : headers.length - 1;
-
-  tbody.innerHTML = '';
-  pickDiv.innerHTML = '';
-
-  let strongStocks = [];
-  let totalCount = 0;
-  let summary = { zhu: 0, lin: 0, yan: 0, chen: 0, fire: 0 };
-
-  for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(/[,;]/).map(c => c.trim().replace(/^"|"$/g, ''));
-    if (cols.length < 2) continue;
-
-    let code = cols[codeIdx] || "—";
-    let name = cols[nameIdx] || "—";
-    let reason = cols[reasonIdx] || "—";
-    let position = cols[positionIdx] || "—";
-    let price = cols[priceIdx] || "—";
-    let fire = cols[fireIdx] || "—";
-
-    if (code && name === "—" && code.includes(" ")) {
-      const parts = code.split(" ");
-      code = parts[0];
-      name = parts[1] || parts[0];
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <title>XQ 選股多重共振分析｜深色科技風</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root{
+      --bg:#0b0f14;
+      --panel:#121826;
+      --card:#0f1a2b;
+      --muted:#8ba3b8;
+      --text:#e6f0ff;
+      --accent:#35c0ff;
+      --accent2:#7bffb7;
+      --warn:#ff8a65;
+      --ok:#38f18a;
+      --bad:#ff5d5d;
+      --glow: 0 0 12px rgba(53,192,255,.35), 0 0 24px rgba(53,192,255,.15);
+      --radius:14px;
+    }
+    html,body{height:100%}
+    body{
+      margin:0;
+      background:
+        radial-gradient(1200px 600px at 80% -10%, rgba(53,192,255,.08), transparent 60%),
+        radial-gradient(900px 500px at -10% 10%, rgba(123,255,183,.06), transparent 60%),
+        linear-gradient(180deg, #0a0e13 0%, #0b1016 60%, #0b0f14 100%);
+      color:var(--text);
+      font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",PingFangTC,Roboto,"Noto Sans TC","Helvetica Neue",Arial,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol",sans-serif;
+      letter-spacing:.2px;
+    }
+    .wrap{max-width:1100px;margin:0 auto;padding:32px 16px 80px}
+    header{
+      display:flex;align-items:center;justify-content:space-between;gap:12px;
+      padding:16px 18px;margin-bottom:18px;border-radius:var(--radius);
+      background:linear-gradient(180deg, rgba(17,26,41,.9), rgba(14,22,36,.9));
+      border:1px solid rgba(81,143,197,.2);
+      box-shadow:var(--glow);
+    }
+    .brand{display:flex;align-items:center;gap:14px}
+    .logo{
+      width:40px;height:40px;border-radius:12px;
+      background:
+        conic-gradient(from 210deg, rgba(53,192,255,.9), rgba(123,255,183,.9), rgba(53,192,255,.9)),
+        radial-gradient(12px 12px at 70% 30%, rgba(255,255,255,.4), transparent 60%);
+      box-shadow:0 0 0 2px rgba(53,192,255,.2), 0 0 30px rgba(53,192,255,.25) inset;
+    }
+    h1{font-size:18px;margin:0}
+    .sub{color:var(--muted);font-size:12px;margin-top:-2px}
+    .hint{
+      color:#b2c7d9;font-size:12px;padding:6px 10px;border-radius:9px;
+      background:rgba(23,36,54,.7);border:1px dashed rgba(97,157,210,.35)
     }
 
-    totalCount++;
-    let matchCount = 0;
-    if (reason.includes("朱")) { matchCount++; summary.zhu++; }
-    if (reason.includes("林")) { matchCount++; summary.lin++; }
-    if (reason.includes("春")) { matchCount++; summary.yan++; }
-    if (reason.includes("陳")) { matchCount++; summary.chen++; }
-
-    const isFired = fire.includes("點火") || fire.includes("是") || fire.includes("🔥") || fire.includes("火") || fire.includes("點");
-    if (isFired) summary.fire++;
-
-    const isHighlight = matchCount >= 2 || (matchCount >= 1 && isFired);
-    if (isHighlight) {
-      strongStocks.push({ code, name, reason, position, fire, price, isFired });
+    .uploader{
+      margin:18px 0 20px;padding:18px;border-radius:var(--radius);
+      background:linear-gradient(180deg, rgba(14,22,36,.85), rgba(10,17,28,.85));
+      border:1px solid rgba(81,143,197,.2)
+    }
+    .uploader .row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+    input[type=file]{
+      appearance:none;background:#0c1726;color:var(--text);
+      border:1px solid rgba(81,143,197,.28);border-radius:10px;
+      padding:10px 12px;max-width:100%;cursor:pointer
+    }
+    .btn{
+      appearance:none;background:linear-gradient(90deg, #1a87ff, #13c6aa);
+      color:#051019;border:0;border-radius:10px;padding:10px 14px;font-weight:700;
+      box-shadow:0 6px 16px rgba(53,192,255,.25),0 0 0 1px rgba(53,192,255,.28) inset;
+      cursor:pointer
+    }
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .note{
+      margin-top:10px;color:#b0c4d4;font-size:12px
+    }
+    .error{
+      color:var(--warn);font-weight:600
     }
 
-    const tr = document.createElement('tr');
-    if (isHighlight) tr.className = "highlight";
-    tr.innerHTML = `<td>${code}</td><td>${name}</td><td>${reason}</td><td>${position}</td><td>${price}</td><td>${fire}</td>`;
-    tbody.appendChild(tr);
-  }
+    .grid{
+      display:grid;grid-template-columns:1.2fr 1fr;gap:16px
+    }
+    @media (max-width:980px){ .grid{grid-template-columns:1fr} }
 
-  if (strongStocks.length > 0) {
-    strongStocks.forEach(s => {
-      const item = document.createElement('div');
-      item.style.marginBottom = "12px";
-      item.innerHTML = `<div class="title" style="color:#35c0ff">🚀 ${s.name} (${s.code})</div> <div class="kv" style="margin-top:6px;"> <span class="cell">策略: <b style="color:#facc15">${s.reason}</b></span> <span class="cell">位階: <b style="color:#7bffb7">${s.position}</b></span> <span class="cell">進場: <b style="color:#7bffb7">${s.price}</b></span> <span class="cell">狀態: <b style="color:#ff8a65">${s.fire}</b></span> </div>`;
-      pickDiv.appendChild(item);
+    .card{
+      background:linear-gradient(180deg, rgba(15,26,43,.95), rgba(12,22,36,.95));
+      border:1px solid rgba(81,143,197,.22);
+      border-radius:var(--radius);padding:16px 16px 14px
+    }
+    .card h2{font-size:16px;margin:0 0 10px}
+    .tag{
+      display:inline-flex;align-items:center;gap:6px;
+      padding:4px 8px;border-radius:8px;font-size:12px;margin-right:8px
+    }
+    .tag.ok{background:rgba(56,241,138,.1);color:var(--ok);border:1px solid rgba(56,241,138,.35)}
+    .tag.hot{background:rgba(255,138,101,.1);color:var(--warn);border:1px solid rgba(255,138,101,.35)}
+    .tag.ms{background:rgba(53,192,255,.08);color:var(--accent);border:1px solid rgba(53,192,255,.3)}
+
+    .pick{
+      display:flex;flex-direction:column;gap:10px
+    }
+    .pick .title{font-size:20px;font-weight:800;letter-spacing:.5px}
+    .kv{display:flex;flex-wrap:wrap;gap:10px;color:#cfe3f7}
+    .kv .cell{background:#0b1523;border:1px solid rgba(81,143,197,.25);padding:8px 10px;border-radius:10px}
+    .desc{
+      margin-top:6px;padding:10px 12px;border-radius:12px;
+      background:linear-gradient(180deg, rgba(10,22,38,.9), rgba(9,18,30,.9));
+      border:1px solid rgba(81,143,197,.2);color:#d6e6f6
+    }
+
+    table{
+      width:100%;border-collapse:separate;border-spacing:0 8px
+    }
+    thead th{
+      font-size:12px;color:#a7bed0;font-weight:600;text-align:left;padding:8px 10px
+    }
+    tbody tr{
+      background:linear-gradient(180deg, rgba(11,21,34,.9), rgba(9,18,30,.9));
+      border:1px solid rgba(81,143,197,.18)
+    }
+    tbody td{
+      padding:10px;border-top:1px solid rgba(81,143,197,.18);
+      border-bottom:1px solid rgba(81,143,197,.18)
+    }
+    tbody tr td:first-child{border-left:1px solid rgba(81,143,197,.18);border-radius:10px 0 0 10px}
+    tbody tr td:last-child{border-right:1px solid rgba(81,143,197,.18);border-radius:0 10px 10px 0}
+    tr.highlight{outline:1px solid rgba(53,192,255,.45);box-shadow:0 0 0 2px rgba(53,192,255,.15) inset}
+    .mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:#d7f2ff}
+    .muted{color:#9fb4c5}
+    .pill{
+      display:inline-block;padding:3px 8px;border-radius:999px;font-size:12px;
+      border:1px solid rgba(81,143,197,.3);background:rgba(53,192,255,.06);color:#bfe7ff;margin-right:4px
+    }
+    footer{margin-top:28px;color:#7e98ad;font-size:12px;text-align:center}
+    .hide{display:none}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div>
+          <h1>🐙 XQ 選股多重共振分析儀</h1>
+          <div class="sub">支援名師【朱】【林】【春】【陳】與盤中點火偵測｜RWD 深色科技風</div>
+        </div>
+      </div>
+      <div class="hint">請選取從 XQ 全球贏家匯出的 CSV 檔案進行分析</div>
+    </header>
+
+    <section class="uploader">
+      <div class="row">
+        <input id="file" type="file" accept=".csv,text/csv" />
+        <button id="btnParse" class="btn" disabled>讀取並分析</button>
+        <span id="status" class="note">請上傳從 XQ 全球贏家「選股結果」匯出的 CSV 檔。</span>
+      </div>
+      <div class="note">必要欄位建議包含：代碼/名稱、觸發原因(可含【朱】【林】【春】【陳】)、位階、建議進場價、盤中點火(是/否)。</div>
+      <div id="err" class="note error hide"></div>
+    </section>
+
+    <section class="grid">
+      <div class="card">
+        <h2>🔥 多重共振強勢股（盤中點火優先）</h2>
+        <div id="pick" class="pick">
+          <div class="muted">尚未載入資料，請先上傳 CSV 檔案</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>🧠 AI 技術面智能化綜合描述</h2>
+        <div id="desc" class="desc">等待數據載入後，系統將自動解析四大名師的共振狀態與內部量能結構...</div>
+        <div style="margin-top:8px">
+          <span class="tag ms">名師共振</span>
+          <span class="tag hot">盤中點火</span>
+          <span class="tag ok">量價齊揚</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" style="margin-top:16px">
+      <h2>📊 今日選股完整清單</h2>
+      <div style="overflow:auto">
+        <table id="table">
+          <thead>
+            <tr>
+              <th>代碼</th>
+              <th>名稱</th>
+              <th>觸發原因 / 名師</th>
+              <th>位階</th>
+              <th>建議進場價</th>
+              <th>盤中點火</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr><td colspan="6" class="muted">尚未載入資料</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer>策略提示：多重共振（同時具備兩位以上名師條件，且盤中點火）優先；進出請搭配風控與盤勢。</footer>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById('file');
+    const btnParse = document.getElementById('btnParse');
+    const statusText = document.getElementById('status');
+    const errBox = document.getElementById('err');
+    const tbody = document.getElementById('tbody');
+    const pickDiv = document.getElementById('pick');
+    const descDiv = document.getElementById('desc');
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length > 0) {
+        btnParse.disabled = false;
+        statusText.innerText = `已選取檔案: ${fileInput.files[0].name}`;
+        errBox.classList.add('hide');
+      } else {
+        btnParse.disabled = true;
+      }
     });
-  } else {
-    pickDiv.innerHTML = '今日未偵測到符合雙重名師共振或點火之強勢股';
-  }
 
-  let report = `【自動化技術面結構報告】\n今日 XQ 策略雷達共篩選出 ${totalCount} 檔個股。\n\n`;
-  if (strongStocks.length > 0) {
-    const topStock = strongStocks[0];
-    report += `🔥 核心焦點：系統今日成功鎖定 ${strongStocks.length} 檔滿足名師「多重共振」架構之強勢標的。其中以 【${topStock.name}】 多頭結構最為突顯，目前該股處於${topStock.position}，且盤中釋放【${topStock.fire}】攻擊訊號，技術面凝聚了 ${topStock.reason} 四大名師的多重策略認證，動能強烈爆發。\n\n`;
-  } else {
-    report += `📈 盤勢結構：今日盤面表現相對分散，個股未出現多重指標強烈共振。整體多頭動能處於零星點火狀態，建議靜待關鍵回溫訊號。\n\n`;
-  }
-  report += `🎯 策略分佈統計：\n- 朱家鴻(均線多頭)觸發: ${summary.zhu} 檔\n- 林穎(突破強勢紅K)觸發: ${summary.lin} 檔\n- 春燕(量大發動攻擊)觸發: ${summary.yan} 檔\n- 陳重銘(護城河低檔)觸發: ${summary.chen} 檔\n- 盤中雷達已點火個股: ${summary.fire} 檔。\n\n風控提示：請優先留意共振強勢股的「建議進場價」防守力道，若個股處於低位或中位更具防禦優勢。`;
-  
-  descDiv.innerText = report;
-  statusText.innerText = "分析完成！已成功解碼 XQ 數據。";
-}
+    btnParse.addEventListener('click', () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const text = e.target.result;
+          processCSV(text);
+        } catch (err) {
+          showError(`解析失敗: ${err.message}`);
+        }
+      };
+      reader.onerror = () => showError("檔案讀取發生錯誤。");
+      reader.readAsText(file, 'UTF-8');
+    });
+
+    function showError(msg) {
+      errBox.innerText = msg;
+      errBox.classList.remove('hide');
+    }
+
+    function processCSV(csvText) {
+      const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
+      if (lines.length < 2) {
+        showError("CSV 檔案內容不足（缺少標頭或數據）");
+        return;
+      }
+
+      const headers = lines[0].split(/[,;]/).map(h => h.trim().replace(/^"|"$/g, ''));
+      
+      let codeIdx = headers.findIndex(h => h.includes("代碼") || h.includes("商品") || h.includes("代號"));
+      let nameIdx = headers.findIndex(h => h.includes("名稱") || h.includes("公司"));
+      let reasonIdx = headers.findIndex(h => h.includes("原因") || h.includes("名師") || h.includes("觸發"));
+      let positionIdx = headers.findIndex(h => h.includes("位階"));
+      let priceIdx = headers.findIndex(h => h.includes("進場") || h.includes("價"));
+      let fireIdx = headers.findIndex(h => h.includes("點火") || h.includes("雷達") || h.includes("連動"));
+
+      if (codeIdx === -1) codeIdx = 0;
+      if (nameIdx === -1) nameIdx = headers.length > 1 ? 1 : 0;
+      if (reasonIdx === -1) reasonIdx = headers.length > 3 ? 3 : 2;
+      if (positionIdx === -1) positionIdx = headers.length > 2 ? 2 : 1;
+      if (priceIdx === -1) priceIdx = headers.length > 4 ? 4 : 3;
+      if (fireIdx === -1) fireIdx = headers.length > 5 ? 5 : headers.length - 1;
+
+      tbody.innerHTML = '';
+      pickDiv.innerHTML = '';
+
+      let strongStocks = [];
+      let totalCount = 0;
+      let summary = { zhu: 0, lin: 0, yan: 0, chen: 0, fire: 0 };
+
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(/[,;]/).map(c => c.trim().replace(/^"|"$/g, ''));
+        if (cols.length < 2) continue;
+
+        let code = cols[codeIdx] || "—";
+        let name = cols[nameIdx] || "—";
+        let reason = cols[reasonIdx] || "—";
+        let position = cols[positionIdx] || "—";
+        let price = cols[priceIdx] || "—";
+        let fire = cols[fireIdx] || "—";
+
+        if (code && name === "—" && code.includes(" ")) {
+          const parts = code.split(" ");
+          code = parts[0];
+          name = parts[1] || parts[0];
+        }
+
+        totalCount++;
+        let matchCount = 0;
+        if (reason.includes("朱")) { matchCount++; summary.zhu++; }
+        if (reason.includes("林")) { matchCount++; summary.lin++; }
+        if (reason.includes("春")) { matchCount++; summary.yan++; }
+        if (reason.includes("陳")) { matchCount++; summary.chen++; }
+
+        const isFired = fire.includes("點火") || fire.includes("是") || fire.includes("🔥") || fire.includes("火") || fire.includes("點");
+        if (isFired) summary.fire++;
+
+        const isHighlight = matchCount >= 2 || (matchCount >= 1 && isFired);
+        if (isHighlight) {
+          strongStocks.push({ code, name, reason, position, fire, price, isFired });
+        }
+
+        const tr = document.createElement('tr');
+        if (isHighlight) tr.className = "highlight";
+        tr.innerHTML = `<td>${code}</td><td>${name}</td><td>${reason}</td><td>${position}</td><td>${price}</td><td>${fire}</td>`;
+        tbody.appendChild(tr);
+      }
+
+      if (strongStocks.length > 0) {
+        strongStocks.forEach(s => {
+          const item = document.createElement('div');
+          item.style.marginBottom = "12px";
+          item.innerHTML = `<div class="title" style="color:#35c0ff">🚀 ${s.name} (${s.code})</div> <div class="kv" style="margin-top:6px;"><span class="cell">策略: <b style="color:#facc15">${s.reason}</b></span> <span class="cell">位階: <b style="color:#7bffb7">${s.position}</b></span> <span class="cell">進場: <b style="color:#7bffb7">${s.price}</b></span> <span class="cell">狀態: <b style="color:#ff8a65">${s.fire}</b></span></div>`;
+          pickDiv.appendChild(item);
+        });
+      } else {
+        pickDiv.innerHTML = '今日未偵測到符合雙重名師共振或點火之強勢股';
+      }
+
+      let report = `【自動化技術面結構報告】\n今日 XQ 策略雷達共篩選出 ${totalCount} 檔個股。\n\n`;
+      if (strongStocks.length > 0) {
+        const topStock = strongStocks[0];
+        report += `🔥 核心焦點：系統今日成功鎖定 ${strongStocks.length} 檔滿足名師「多重共振」架構之強勢標的。其中以 【${topStock.name}】 多頭結構最為突顯，目前該股處於${topStock.position}，且盤中釋放【${topStock.fire}】攻擊訊號，技術面凝聚了 ${topStock.reason} 四大名師的多重策略認證，動能強烈爆發。\n\n`;
+      } else {
+        report += `📈 盤勢結構：今日盤面表現相對分散，個股未出現多重指標強烈共振。整體多頭動能處於零星點火狀態，建議靜待關鍵回溫訊號。\n\n`;
+      }
+      report += `🎯 策略分佈統計：\n- 朱家鴻(均線多頭)觸發: ${summary.zhu} 檔\n- 林穎(突破強勢紅K)觸發: ${summary.lin} 檔\n- 春燕(量大發動攻擊)觸發: ${summary.yan} 檔\n- 陳重銘(護城河低檔)觸發: ${summary.chen} 檔\n- 盤中雷達已點火個股: ${summary.fire} 檔。\n\n風控提示：請優先留意共振強勢股的建議進場價防守力道，若個股處於低位或中位更具防禦優勢。`;
+
+      descDiv.innerText = report;
+      statusText.innerText = "分析完成！已成功解碼 XQ 數據。";
+    }
+  </script>
+</body>
+</html>
